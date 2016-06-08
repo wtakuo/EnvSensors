@@ -1,7 +1,6 @@
-
 class I2CDev(object):
     """Common class for I2C devices"""
-    
+
     def __init__(self, i2c, addr):
         self.__i2c = i2c
         self.__addr = addr
@@ -44,5 +43,3 @@ class I2CDev(object):
         """Tests if all of the specified bits are off in a register."""
         d = self.read_byte_data(reg)
         return d & ~bits == d
-
-    

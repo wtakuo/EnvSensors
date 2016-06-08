@@ -13,21 +13,26 @@ REG_CTRL_MEAS = 0xF4
 REG_CONFIG = 0xF5
 REGS_DATA = range(0xf7, 0xff)
 
+
 class BME280(I2CDev):
-    def __init__(self, i2c, addr = ADDR_0x76):
+    def __init__(self, i2c, addr=ADDR_0x76):
         super(BME280, self).__init__(i2c, addr)
+        self.__last_t = 0.0
+        self.__last_p = 0.0
+        self.__last_h = 0.0
+        self.__t_fine = 0
 
     def get_values(self):
-        return (self.__lastT, self.__lastP, self.__lastH)
+        return self.__last_t, self.__last_p, self.__last_h
 
     def get_temperature(self):
-        return self.__lastT
+        return self.__last_t
 
     def get_humidity(self):
-        return self.__lastH
+        return self.__last_h
 
     def get_pressure(self):
-        return self.__lastP
+        return self.__last_p
 
     def read_calibration_data(self):
         cv = []
@@ -59,7 +64,7 @@ class BME280(I2CDev):
         rp = (rd[0] << 12) | (rd[1] << 4) | (rd[2] >> 4)
         rt = (rd[3] << 12) | (rd[4] << 4) | (rd[5] >> 4)
         rh = (rd[6] << 8) | rd[7]
-        return (rt, rp, rh)
+        return rt, rp, rh
 
     def show_calibration_data(self):
         print("dig_T1 = %d;" % self.__T1)
@@ -79,43 +84,43 @@ class BME280(I2CDev):
         print("dig_H3 = %d;" % self.__H3)
         print("dig_H4 = %d;" % self.__H4)
         print("dig_H5 = %d;" % self.__H5)
-        print("dig_H6 = %d;" % self.__H6)                                 
+        print("dig_H6 = %d;" % self.__H6)
 
     def compensate_t(self, rt):
-        var1 = (((rt >> 3) - (self.__T1 << 1)) * self.__T2) >> 11;
-        var2 = (((((rt >> 4) - self.__T1) * ((rt >> 4) - self.__T1)) >> 12) * self.__T3) >> 14;
-        self.__t_fine = var1 + var2;
-        return (self.__t_fine * 5 + 128) >> 8;
+        var1 = (((rt >> 3) - (self.__T1 << 1)) * self.__T2) >> 11
+        var2 = (((((rt >> 4) - self.__T1) * ((rt >> 4) - self.__T1)) >> 12) * self.__T3) >> 14
+        self.__t_fine = var1 + var2
+        return (self.__t_fine * 5 + 128) >> 8
 
     def compensate_p(self, rp):
-        var1 = self.__t_fine - 128000;
-        var2 = var1 * var1 * self.__P6;
-        var2 = var2 + ((var1 * self.__P5) << 17);
-        var2 = var2 + (self.__P4 << 35);
-        var1 = ((var1 * var1 * self.__P3) >> 8) + ((var1 * self.__P2) << 12);
-        var1 = ((1 << 47) + var1) * self.__P1 >> 33;
+        var1 = self.__t_fine - 128000
+        var2 = var1 * var1 * self.__P6
+        var2 += (var1 * self.__P5) << 17
+        var2 += self.__P4 << 35
+        var1 = ((var1 * var1 * self.__P3) >> 8) + ((var1 * self.__P2) << 12)
+        var1 = ((1 << 47) + var1) * self.__P1 >> 33
         if var1 == 0:
             return 0
-        p = 1048576 - rp;
-        p = (((p << 31) - var2) * 3125) / var1;
-        var1 = (self.__P9 * (p >> 13) * (p >> 13)) >> 25;
-        var2 = (self.__P8 * p) >> 19;
-        p = ((p + var1 + var2) >> 8) + (self.__P7 << 4);
+        p = 1048576 - rp
+        p = (((p << 31) - var2) * 3125) / var1
+        var1 = (self.__P9 * (p >> 13) * (p >> 13)) >> 25
+        var2 = (self.__P8 * p) >> 19
+        p = ((p + var1 + var2) >> 8) + (self.__P7 << 4)
         return p
 
     def compensate_h(self, rh):
-        v_x1_u32r = self.__t_fine - 76800;
+        v_x1_u32r = self.__t_fine - 76800
         v_x1_u32r = ((((rh << 14) - (self.__H4 << 20) - (self.__H5 * v_x1_u32r)) + 16384) >> 15) * (((((((v_x1_u32r * self.__H6) >> 10) * (((v_x1_u32r * self.__H3) >> 11) + 32768)) >> 10) + 2097152) * self.__H2 + 8192) >> 14)
-        v_x1_u32r = v_x1_u32r - (((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * self.__H1) >> 4)
+        v_x1_u32r -= ((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * self.__H1) >> 4
         v_x1_u32r = 0 if v_x1_u32r < 0 else v_x1_u32r
         v_x1_u32r = 419430400 if v_x1_u32r > 419430400 else v_x1_u32r
         return v_x1_u32r >> 12
 
     def update(self):
         (rt, rp, rh) = self.read_data()
-        self.__lastT = self.compensate_t(rt) / 100.0
-        self.__lastP = self.compensate_p(rp) / 25600.0
-        self.__lastH = self.compensate_h(rh) / 1024.0
+        self.__last_t = self.compensate_t(rt) / 100.0
+        self.__last_p = self.compensate_p(rp) / 25600.0
+        self.__last_h = self.compensate_h(rh) / 1024.0
 
     def setup(self):
         osrs_t = 1
@@ -123,10 +128,10 @@ class BME280(I2CDev):
         osrs_h = 1
         mode = 3
         t_sb = 5
-        filter = 0
+        fltr = 0
         spi3w_en = 0
         ctrl_meas = (osrs_t << 5) | (osrs_p << 2) | mode
-        config = (t_sb << 5) | (filter << 2) | spi3w_en
+        config = (t_sb << 5) | (fltr << 2) | spi3w_en
         ctrl_hum = osrs_h
         self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
         self.write_byte_data(REG_CONFIG, config)
