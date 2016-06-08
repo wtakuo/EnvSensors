@@ -1,4 +1,3 @@
-import time
 from i2cdev import I2CDev
 from util import sb, ss, b2us, b2ss
 
@@ -117,3 +116,19 @@ class BME280(I2CDev):
         self.__lastT = self.compensate_t(rt) / 100.0
         self.__lastP = self.compensate_p(rp) / 25600.0
         self.__lastH = self.compensate_h(rh) / 1024.0
+
+    def setup(self):
+        osrs_t = 1
+        osrs_p = 1
+        osrs_h = 1
+        mode = 3
+        t_sb = 5
+        filter = 0
+        spi3w_en = 0
+        ctrl_meas = (osrs_t << 5) | (osrs_p << 2) | mode
+        config = (t_sb << 5) | (filter << 2) | spi3w_en
+        ctrl_hum = osrs_h
+        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
+        self.write_byte_data(REG_CONFIG, config)
+        self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
+        self.read_calibration_data()
