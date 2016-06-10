@@ -9,7 +9,6 @@ def main():
         s.setup()
         s.update()
         (t, p, h) = s.get_values()
-        print("t=%f p=%f h=%f" % (t, p, h))
         print("temperature : %7.2f C" % t)
         print("pressure    : %7.2f hPa" % p)
         print("humidity    : %7.2f %%" % h)
