@@ -1,10 +1,11 @@
 # envsensors: I2C Interface Classes for Environmental Sensors
 # Copyright (C) 2016, Takuo Watanabe
 
-import time
-import smbus
 import argparse
-import bme280
+import smbus
+import time
+
+from envsensors.bme280 import BME280
 
 parser = argparse.ArgumentParser()
 parser.add_argument('-c', '--continuous', default=False, const=True, nargs='?')
@@ -23,7 +24,7 @@ def print_values(sensor):
 def main():
     args = parser.parse_args()
     i2c = smbus.SMBus(1)
-    s = bme280.BME280(i2c)
+    s = BME280(i2c)
     mode = 3
     if args.mode == 'forced':
         mode = 0

@@ -2,7 +2,7 @@
 <project version="4">
   <component name="ProjectModuleManager">
     <modules>
-      <module fileurl="file://$PROJECT_DIR$/.idea/envsensors.iml" filepath="$PROJECT_DIR$/.idea/envsensors.iml" />
+      <module fileurl="file://$PROJECT_DIR$/.idea/EnvSensors.iml" filepath="$PROJECT_DIR$/.idea/EnvSensors.iml" />
     </modules>
   </component>
 </project>
