@@ -1,4 +1,4 @@
-# envsensors: I2C Interface Classes for Environmental Sensors
+# EnvSensors: A Python Library for I2C Environmental Sensors
 # Copyright (C) 2016, Takuo Watanabe
 
 import time
@@ -19,7 +19,7 @@ REGS_DATA = range(0xf7, 0xff)
 
 
 class BME280(I2CDev):
-    """I2C Interface for Bosch BME280 Environmental Sensor"""
+    """I2C Interface Class for Bosch BME280 Environmental Sensor"""
 
     def __init__(self, i2c, addr=ADDR_0x76):
         super(BME280, self).__init__(i2c, addr)

@@ -1,4 +1,4 @@
-# envsensors: I2C Interface Classes for Environmental Sensors
+# EnvSensors: A Python Library for I2C Environmental Sensors
 # Copyright (C) 2016, Takuo Watanabe
 
 import argparse

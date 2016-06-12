@@ -1,9 +1,9 @@
-# envsensors: I2C Interface Classes for Environmental Sensors
+# EnvSensors: A Python Library for I2C Environmental Sensors
 # Copyright (C) 2016, Takuo Watanabe
 
 
 class I2CDev(object):
-    """Common class for I2C devices"""
+    """Common Class for I2C Devices"""
 
     def __init__(self, i2c, addr):
         self.__i2c = i2c
