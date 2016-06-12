@@ -1,3 +1,6 @@
+# envsensors: I2C Interface Classes for Environmental Sensors
+# Copyright (C) 2016, Takuo Watanabe
+
 class I2CDev(object):
     """Common class for I2C devices"""
 
@@ -11,7 +14,7 @@ class I2CDev(object):
 
     def read_word_data(self, reg):
         """Read a single word (16 bits) from a register."""
-        return self.__i2c.read_word_data(self._addr, reg)
+        return self.__i2c.read_word_data(self.__addr, reg)
 
     def write_byte(self, reg):
         """Perform a write operation to a register."""

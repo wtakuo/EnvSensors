@@ -1,3 +1,6 @@
+# envsensors: I2C Interface Classes for Environmental Sensors
+# Copyright (C) 2016, Takuo Watanabe
+
 # The sign extension functions are adapted from:
 # Henry S. Warren, Jr., "Hacker's Delight (2nd ed)", Addison-Wesley, 2012.
 

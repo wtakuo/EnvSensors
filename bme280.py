@@ -1,3 +1,7 @@
+# envsensors: I2C Interface Classes for Environmental Sensors
+# Copyright (C) 2016, Takuo Watanabe
+
+import time
 from i2cdev import I2CDev
 from util import sb, ss, b2us, b2ss
 
@@ -15,26 +19,51 @@ REGS_DATA = range(0xf7, 0xff)
 
 
 class BME280(I2CDev):
+    """I2C Interface for Bosch BME280 Environmental Sensor"""
+
     def __init__(self, i2c, addr=ADDR_0x76):
         super(BME280, self).__init__(i2c, addr)
         self.__last_t = 0.0
         self.__last_p = 0.0
         self.__last_h = 0.0
         self.__t_fine = 0
+        # trimming parameters
+        self.__T1 = 0
+        self.__T2 = 0
+        self.__T3 = 0
+        self.__P1 = 0
+        self.__P2 = 0
+        self.__P3 = 0
+        self.__P4 = 0
+        self.__P5 = 0
+        self.__P6 = 0
+        self.__P7 = 0
+        self.__P8 = 0
+        self.__P9 = 0
+        self.__H1 = 0
+        self.__H2 = 0
+        self.__H3 = 0
+        self.__H4 = 0
+        self.__H5 = 0
+        self.__H6 = 0
 
     def get_values(self):
+        """Returns the last measured values"""
         return self.__last_t, self.__last_p, self.__last_h
 
     def get_temperature(self):
+        """Returns the last measured temperature (Celsius)"""
         return self.__last_t
 
-    def get_humidity(self):
-        return self.__last_h
-
     def get_pressure(self):
+        """Returns the last measured pressure (Pa)"""
         return self.__last_p
 
-    def read_calibration_data(self):
+    def get_humidity(self):
+        """Returns the last measured humidity (RH)"""
+        return self.__last_h
+
+    def read_trimming_params(self):
         cv = []
         for r in REGS_CAL:
             cv.append(self.read_byte_data(r))
@@ -57,16 +86,16 @@ class BME280(I2CDev):
         self.__H5 = ss((cv[30] << 4) | (0x0F & (cv[29] >> 4)))
         self.__H6 = sb(cv[31])
 
-    def read_data(self):
+    def read_raw_data(self):
         rd = []
         for r in REGS_DATA:
             rd.append(self.read_byte_data(r))
-        rp = (rd[0] << 12) | (rd[1] << 4) | (rd[2] >> 4)
         rt = (rd[3] << 12) | (rd[4] << 4) | (rd[5] >> 4)
+        rp = (rd[0] << 12) | (rd[1] << 4) | (rd[2] >> 4)
         rh = (rd[6] << 8) | rd[7]
         return rt, rp, rh
 
-    def show_calibration_data(self):
+    def print_trimming_params(self):
         print("dig_T1 = %d;" % self.__T1)
         print("dig_T2 = %d;" % self.__T2)
         print("dig_T3 = %d;" % self.__T3)
@@ -88,7 +117,8 @@ class BME280(I2CDev):
 
     def compensate_t(self, rt):
         var1 = (((rt >> 3) - (self.__T1 << 1)) * self.__T2) >> 11
-        var2 = (((((rt >> 4) - self.__T1) * ((rt >> 4) - self.__T1)) >> 12) * self.__T3) >> 14
+        var2 = (((((rt >> 4) - self.__T1) * ((rt >> 4) - self.__T1)) >> 12) *
+                self.__T3) >> 14
         self.__t_fine = var1 + var2
         return (self.__t_fine * 5 + 128) >> 8
 
@@ -110,30 +140,60 @@ class BME280(I2CDev):
 
     def compensate_h(self, rh):
         v_x1_u32r = self.__t_fine - 76800
-        v_x1_u32r = ((((rh << 14) - (self.__H4 << 20) - (self.__H5 * v_x1_u32r)) + 16384) >> 15) * (((((((v_x1_u32r * self.__H6) >> 10) * (((v_x1_u32r * self.__H3) >> 11) + 32768)) >> 10) + 2097152) * self.__H2 + 8192) >> 14)
-        v_x1_u32r -= ((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) * self.__H1) >> 4
+        v_x1_u32r = ((((rh << 14) - (self.__H4 << 20) -
+                       (self.__H5 * v_x1_u32r)) + 16384) >> 15) * \
+                    (((((((v_x1_u32r * self.__H6) >> 10) *
+                         (((v_x1_u32r * self.__H3) >> 11) + 32768)) >> 10) +
+                       2097152) * self.__H2 + 8192) >> 14)
+        v_x1_u32r -= ((((v_x1_u32r >> 15) * (v_x1_u32r >> 15)) >> 7) *
+                      self.__H1) >> 4
         v_x1_u32r = 0 if v_x1_u32r < 0 else v_x1_u32r
         v_x1_u32r = 419430400 if v_x1_u32r > 419430400 else v_x1_u32r
         return v_x1_u32r >> 12
 
+    def get_mode(self):
+        """Returns the current mode of the device"""
+        return self.read_byte_data(REG_CTRL_MEAS) & 0x03
+
+    def set_mode(self, mode):
+        """Set the mode of the device"""
+        ctrl_meas = self.read_byte_data(REG_CTRL_MEAS)
+        ctrl_hum = self.read_byte_data(REG_CTRL_HUM)
+        ctrl_meas &= 0xfc
+        ctrl_meas |= mode
+        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
+        self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
+
     def update(self):
-        (rt, rp, rh) = self.read_data()
+        mode = self.get_mode()
+        if mode == 0:
+            self.set_mode(1)
+        while self.read_byte_data(REG_STATUS) & 0x08 != 0:
+            time.sleep(0.02)
+        (rt, rp, rh) = self.read_raw_data()
         self.__last_t = self.compensate_t(rt) / 100.0
-        self.__last_p = self.compensate_p(rp) / 25600.0
+        self.__last_p = self.compensate_p(rp) / 256.0
         self.__last_h = self.compensate_h(rh) / 1024.0
 
-    def setup(self):
-        osrs_t = 1
-        osrs_p = 1
-        osrs_h = 1
-        mode = 3
-        t_sb = 5
-        fltr = 0
-        spi3w_en = 0
+    def setup(self,
+              osrs_t=1,  # temperature oversampling x 1
+              osrs_p=1,  # pressure oversampling x 1
+              osrs_h=1,  # humidity oversampling x 1
+              mode=3,    # normal mode
+              t_sb=5,    # standby time 1000ms
+              fltr=0     # IIR filter off
+              ):
+        """Setup the device"""
+        dev_id = self.read_byte_data(REG_ID)
+        if dev_id != 0x60:
+            raise IOError('Invalid device ID', dev_id)
+        # config : t_sb[2:0], fltr[2:0], spi3w_en[0]
+        config = (t_sb << 5) | (fltr << 2)
+        # ctrl_meas : osrs_t[2:0], osrs_p[2:0], mode[1:0]
         ctrl_meas = (osrs_t << 5) | (osrs_p << 2) | mode
-        config = (t_sb << 5) | (fltr << 2) | spi3w_en
+        # ctrl_hum : osrs_h[2:0]
         ctrl_hum = osrs_h
-        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
         self.write_byte_data(REG_CONFIG, config)
+        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
         self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
-        self.read_calibration_data()
+        self.read_trimming_params()
