@@ -1,6 +1,7 @@
 # envsensors: I2C Interface Classes for Environmental Sensors
 # Copyright (C) 2016, Takuo Watanabe
 
+
 class I2CDev(object):
     """Common class for I2C devices"""
 

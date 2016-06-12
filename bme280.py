@@ -165,11 +165,12 @@ class BME280(I2CDev):
         self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
 
     def update(self):
+        """Read measured data and store compensated values"""
         mode = self.get_mode()
         if mode == 0:
             self.set_mode(1)
         while self.read_byte_data(REG_STATUS) & 0x08 != 0:
-            time.sleep(0.02)
+            time.sleep(0.05)
         (rt, rp, rh) = self.read_raw_data()
         self.__last_t = self.compensate_t(rt) / 100.0
         self.__last_p = self.compensate_p(rp) / 256.0
