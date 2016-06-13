@@ -5,7 +5,7 @@ from setuptools import setup
 
 setup(
     name="EnvSensors",
-    version="0.0.0dev1",
+    version="0.0.0.dev1",
     author="Takuo Watanabe",
     author_email="wtakuo@mac.com",
     description="A Python Library for I2C Environmental Sensors",
