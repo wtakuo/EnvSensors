@@ -1,9 +1,12 @@
 *.pyc
-*~
-.DS_Store
+*.egg-info/
+build/
+dist/
+
 .idea/workspace.xml
 .idea/misc.xml
 .idea/remote-mappings.xml
 .idea/dictionaries/
 
-
+*~
+.DS_Store
