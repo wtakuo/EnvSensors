@@ -17,6 +17,10 @@ class I2CDev(object):
         """Read a single word (16 bits) from a register."""
         return self.__i2c.read_word_data(self.__addr, reg)
 
+    def read_i2c_block_data(self, reg, n):
+        """Read a list of data using I2C block read transaction"""
+        return self.__i2c.read_i2c_block_data(self.__addr, reg, n)
+
     def write_byte(self, reg):
         """Perform a write operation to a register."""
         self.__i2c.write_byte(self.__addr, reg)
@@ -24,6 +28,10 @@ class I2CDev(object):
     def write_byte_data(self, reg, val):
         """Write a single byte to a register."""
         self.__i2c.write_byte_data(self.__addr, reg, val)
+
+    def write_i2c_block_data(self, reg, data):
+        """Write a list of data using I2C block write transaction"""
+        self.__i2c.write_i2c_block_data(self.__addr, reg, data)
 
     def set_bits(self, reg, bits, mask=0):
         """Set specified bits in a register."""
@@ -39,11 +47,11 @@ class I2CDev(object):
         self.write_byte_data(reg, d)
 
     def bits_on(self, reg, bits):
-        """Tests if all of the specified bits are on in a register."""
+        """Test if all of the specified bits are on in a register."""
         d = self.read_byte_data(reg)
         return d & bits == bits
 
     def bits_off(self, reg, bits):
-        """Tests if all of the specified bits are off in a register."""
+        """Test if all of the specified bits are off in a register."""
         d = self.read_byte_data(reg)
         return d & ~bits == d

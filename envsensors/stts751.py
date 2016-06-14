@@ -53,38 +53,36 @@ class STTS751(I2CDev):
     def __init__(self, i2c, addr=0x39):
         super(STTS751, self).__init__(i2c, addr)
         self.__standby_mode = False
+        self.__last_temperature = 0.0
 
-    def set_default(self):
-        """Setup the device with default configuration"""
-        self.write_byte_data(CONFIGURATION, 0x00)
-        self.write_byte_data(CONVERSION_RATE, 0x04)
-        self.__standby_mode = False
+    def setup(self,
+              standby=False,  # standby (one-shot) mode
+              resolution=10,  # resolution : 9-12
+              rate=0x04       # conversion rate : 1 conversion/sec
+              ):
+        """Setup the device"""
+        config = 0
+        self.__standby_mode = standby
+        if standby:
+            config |= CONFIGURATION_STOP
+        config |= _TRES_MAP[resolution]
+        self.write_byte_data(CONFIGURATION, config)
+        self.write_byte_data(CONVERSION_RATE, rate & 0x0F)
+        return self
 
-    def set_standby_mode(self):
-        """Set the device to standby mode."""
-        self.set_bits(CONFIGURATION, CONFIGURATION_STOP)
-        self.__standby_mode = True
-
-    def set_continuous_mode(self):
-        """Set the device to conitnuous conversion mode."""
-        self.unset_bits(CONFIGURATION, CONFIGURATION_STOP)
-        self.__standby_mode = False
-
-    def set_resolution(self, res):
-        """Set the temperature resolution. The argument must be in [9..12]."""
-        self.set_bits(CONFIGURATION, _TRES_MAP[res], CONFIGURATION_TRES_MASK)
-
-    def set_conversion_rate(self, rate):
-        """Set the conversion rate."""
-        self.write_byte_data(CONVERSION_RATE, rate & 0x0f)
-
-    def get_temperature(self):
-        """Returns the current temperature as a floating-point number."""
+    def update(self):
+        """Update the latest measured temperature"""
         if self.__standby_mode:
             self.write_byte_data(ONESHOT, 1)
-            time.sleep(0.01)
+            time.sleep(0.02)
             while self.bits_on(STATUS, STATUS_BUSY):
                 time.sleep(0.02)
         th = self.read_byte_data(TEMP_HIGH_BYTE)
         tl = self.read_byte_data(TEMP_LOW_BYTE)
-        return b2ss(th, tl) / 256.0
+        self.__last_temperature = b2ss(th, tl) / 256.0
+        return self
+
+    @property
+    def temperature(self):
+        """Last measured temperature (Celsius)"""
+        return self.__last_temperature

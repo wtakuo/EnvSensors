@@ -15,7 +15,7 @@ REG_CTRL_HUM = 0xF2
 REG_STATUS = 0xF3
 REG_CTRL_MEAS = 0xF4
 REG_CONFIG = 0xF5
-REGS_DATA = range(0xf7, 0xff)
+REGS_DATA_START = 0xF7
 
 
 class BME280(I2CDev):
@@ -23,10 +23,10 @@ class BME280(I2CDev):
 
     def __init__(self, i2c, addr=ADDR_0x76):
         super(BME280, self).__init__(i2c, addr)
+        self.__forced = False
         self.__last_t = 0.0
         self.__last_p = 0.0
         self.__last_h = 0.0
-        self.__t_fine = 0
         # trimming parameters
         self.__T1 = 0
         self.__T2 = 0
@@ -46,22 +46,74 @@ class BME280(I2CDev):
         self.__H4 = 0
         self.__H5 = 0
         self.__H6 = 0
+        self.__t_fine = 0
 
-    def get_values(self):
-        """Returns the last measured values"""
+    def setup(self,
+              forced=False,  # forced (one-shot) mode
+              osrs_t=1,      # temperature oversampling x 1
+              osrs_p=1,      # pressure oversampling x 1
+              osrs_h=1,      # humidity oversampling x 1
+              t_sb=5,        # standby time 1000ms
+              fltr=0         # IIR filter off
+              ):
+        """Setup the device"""
+        dev_id = self.read_byte_data(REG_ID)
+        if dev_id != 0x60:
+            raise IOError('Invalid device ID', dev_id)
+        # config : t_sb[2:0], fltr[2:0], spi3w_en[0]
+        config = (t_sb << 5) | (fltr << 2)
+        # ctrl_meas : osrs_t[2:0], osrs_p[2:0], mode[1:0]
+        self.__forced = forced
+        ctrl_meas = (osrs_t << 5) | (osrs_p << 2) | (0 if forced else 3)
+        # ctrl_hum : osrs_h[2:0]
+        ctrl_hum = osrs_h
+        self.write_byte_data(REG_CONFIG, config)
+        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
+        self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
+        self.read_trimming_params()
+        return self
+
+    def update(self):
+        """Update the latest measured values"""
+        if self.__forced:
+            self.set_mode(1)
+            time.sleep(0.01)
+        while self.read_byte_data(REG_STATUS) & 0x08 != 0:
+            time.sleep(0.01)
+        (rt, rp, rh) = self.read_raw_data()
+        self.__last_t = self.compensate_t(rt) / 100.0
+        self.__last_p = self.compensate_p(rp) / 256.0
+        self.__last_h = self.compensate_h(rh) / 1024.0
+        return self
+
+    @property
+    def values(self):
+        """Last measured values"""
         return self.__last_t, self.__last_p, self.__last_h
 
-    def get_temperature(self):
-        """Returns the last measured temperature (Celsius)"""
+    @property
+    def temperature(self):
+        """Last measured temperature (Celsius)"""
         return self.__last_t
 
-    def get_pressure(self):
-        """Returns the last measured pressure (Pa)"""
+    @property
+    def pressure(self):
+        """Last measured pressure (Pa)"""
         return self.__last_p
 
-    def get_humidity(self):
-        """Returns the last measured humidity (RH)"""
+    @property
+    def humidity(self):
+        """Last measured humidity (RH)"""
         return self.__last_h
+
+    def set_mode(self, mode):
+        """Set the mode of the device"""
+        ctrl_meas = self.read_byte_data(REG_CTRL_MEAS)
+        ctrl_hum = self.read_byte_data(REG_CTRL_HUM)
+        ctrl_meas &= 0xfc
+        ctrl_meas |= mode
+        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
+        self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
 
     def read_trimming_params(self):
         cv = []
@@ -87,33 +139,11 @@ class BME280(I2CDev):
         self.__H6 = sb(cv[31])
 
     def read_raw_data(self):
-        rd = []
-        for r in REGS_DATA:
-            rd.append(self.read_byte_data(r))
+        rd = self.read_i2c_block_data(REGS_DATA_START, 8)
         rt = (rd[3] << 12) | (rd[4] << 4) | (rd[5] >> 4)
         rp = (rd[0] << 12) | (rd[1] << 4) | (rd[2] >> 4)
         rh = (rd[6] << 8) | rd[7]
         return rt, rp, rh
-
-    def print_trimming_params(self):
-        print("dig_T1 = %d;" % self.__T1)
-        print("dig_T2 = %d;" % self.__T2)
-        print("dig_T3 = %d;" % self.__T3)
-        print("dig_P1 = %d;" % self.__P1)
-        print("dig_P2 = %d;" % self.__P2)
-        print("dig_P3 = %d;" % self.__P3)
-        print("dig_P4 = %d;" % self.__P4)
-        print("dig_P5 = %d;" % self.__P5)
-        print("dig_P6 = %d;" % self.__P6)
-        print("dig_P7 = %d;" % self.__P7)
-        print("dig_P8 = %d;" % self.__P8)
-        print("dig_P9 = %d;" % self.__P9)
-        print("dig_H1 = %d;" % self.__H1)
-        print("dig_H2 = %d;" % self.__H2)
-        print("dig_H3 = %d;" % self.__H3)
-        print("dig_H4 = %d;" % self.__H4)
-        print("dig_H5 = %d;" % self.__H5)
-        print("dig_H6 = %d;" % self.__H6)
 
     def compensate_t(self, rt):
         var1 = (((rt >> 3) - (self.__T1 << 1)) * self.__T2) >> 11
@@ -151,50 +181,22 @@ class BME280(I2CDev):
         v_x1_u32r = 419430400 if v_x1_u32r > 419430400 else v_x1_u32r
         return v_x1_u32r >> 12
 
-    def get_mode(self):
-        """Returns the current mode of the device"""
-        return self.read_byte_data(REG_CTRL_MEAS) & 0x03
-
-    def set_mode(self, mode):
-        """Set the mode of the device"""
-        ctrl_meas = self.read_byte_data(REG_CTRL_MEAS)
-        ctrl_hum = self.read_byte_data(REG_CTRL_HUM)
-        ctrl_meas &= 0xfc
-        ctrl_meas |= mode
-        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
-        self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
-
-    def update(self):
-        """Read measured data and store compensated values"""
-        mode = self.get_mode()
-        if mode == 0:
-            self.set_mode(1)
-        while self.read_byte_data(REG_STATUS) & 0x08 != 0:
-            time.sleep(0.05)
-        (rt, rp, rh) = self.read_raw_data()
-        self.__last_t = self.compensate_t(rt) / 100.0
-        self.__last_p = self.compensate_p(rp) / 256.0
-        self.__last_h = self.compensate_h(rh) / 1024.0
-
-    def setup(self,
-              osrs_t=1,  # temperature oversampling x 1
-              osrs_p=1,  # pressure oversampling x 1
-              osrs_h=1,  # humidity oversampling x 1
-              mode=3,    # normal mode
-              t_sb=5,    # standby time 1000ms
-              fltr=0     # IIR filter off
-              ):
-        """Setup the device"""
-        dev_id = self.read_byte_data(REG_ID)
-        if dev_id != 0x60:
-            raise IOError('Invalid device ID', dev_id)
-        # config : t_sb[2:0], fltr[2:0], spi3w_en[0]
-        config = (t_sb << 5) | (fltr << 2)
-        # ctrl_meas : osrs_t[2:0], osrs_p[2:0], mode[1:0]
-        ctrl_meas = (osrs_t << 5) | (osrs_p << 2) | mode
-        # ctrl_hum : osrs_h[2:0]
-        ctrl_hum = osrs_h
-        self.write_byte_data(REG_CONFIG, config)
-        self.write_byte_data(REG_CTRL_MEAS, ctrl_meas)
-        self.write_byte_data(REG_CTRL_HUM, ctrl_hum)
-        self.read_trimming_params()
+    def print_trimming_params(self):
+        print("dig_T1 = %d;" % self.__T1)
+        print("dig_T2 = %d;" % self.__T2)
+        print("dig_T3 = %d;" % self.__T3)
+        print("dig_P1 = %d;" % self.__P1)
+        print("dig_P2 = %d;" % self.__P2)
+        print("dig_P3 = %d;" % self.__P3)
+        print("dig_P4 = %d;" % self.__P4)
+        print("dig_P5 = %d;" % self.__P5)
+        print("dig_P6 = %d;" % self.__P6)
+        print("dig_P7 = %d;" % self.__P7)
+        print("dig_P8 = %d;" % self.__P8)
+        print("dig_P9 = %d;" % self.__P9)
+        print("dig_H1 = %d;" % self.__H1)
+        print("dig_H2 = %d;" % self.__H2)
+        print("dig_H3 = %d;" % self.__H3)
+        print("dig_H4 = %d;" % self.__H4)
+        print("dig_H5 = %d;" % self.__H5)
+        print("dig_H6 = %d;" % self.__H6)
