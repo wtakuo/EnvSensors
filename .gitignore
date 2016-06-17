@@ -3,11 +3,7 @@
 build/
 dist/
 
-.idea/*.iml
-.idea/workspace.xml
-.idea/misc.xml
-.idea/remote-mappings.xml
-.idea/dictionaries/
+.idea/
 
 *~
 .DS_Store
